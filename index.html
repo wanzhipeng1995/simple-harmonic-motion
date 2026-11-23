@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>简谐运动观察台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: model view (left) beside stacked x/v/a time plots (right); F–x + energy + readouts row; controls; theory. */
+:root{
+  --bg:#F0F1F4; --surface:#FFFFFF; --surface-2:#F5F6F8; --ink:#161B26; --muted:#5E6676; --line:#D8DCE3;
+  --accent:#2F4BA8; --accent-ink:#FFFFFF; --accent-soft:#E4E9F7;
+  --x:#2F4BA8; --v:#0B8A6B; --a:#D6336C; --ep:#9C36B5; --ek:#E8590C; --ghost:#868E96;
+  --water:#A5D8FF; --water-line:#4DABF7; --metal:#868E96; --block:#F59F00;
+  --grid:rgba(22,27,38,.09); --tick:rgba(22,27,38,.4); --pill:rgba(255,255,255,.9); --stage:#F8F9FB;
+  --f-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --f-num:ui-monospace,"SF Mono","Cascadia Mono",Consolas,"Roboto Mono",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0D1017; --surface:#141922; --surface-2:#1A202B; --ink:#E6E9EF; --muted:#909AAB; --line:#2A3140;
+  --accent:#91A7FF; --accent-ink:#0D1017; --accent-soft:#1E2640;
+  --x:#91A7FF; --v:#38D9A9; --a:#F783AC; --ep:#DA77F2; --ek:#FFA94D; --ghost:#ADB5BD;
+  --water:#1C3D5A; --water-line:#4DABF7; --metal:#ADB5BD; --block:#FAB005;
+  --grid:rgba(230,233,239,.08); --tick:rgba(230,233,239,.4); --pill:rgba(20,25,34,.92); --stage:#11161E;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0D1017; --surface:#141922; --surface-2:#1A202B; --ink:#E6E9EF; --muted:#909AAB; --line:#2A3140;
+  --accent:#91A7FF; --accent-ink:#0D1017; --accent-soft:#1E2640;
+  --x:#91A7FF; --v:#38D9A9; --a:#F783AC; --ep:#DA77F2; --ek:#FFA94D; --ghost:#ADB5BD;
+  --water:#1C3D5A; --water-line:#4DABF7; --metal:#ADB5BD; --block:#FAB005;
+  --grid:rgba(230,233,239,.08); --tick:rgba(230,233,239,.4); --pill:rgba(20,25,34,.92); --stage:#11161E;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-ui);font-size:15px;line-height:1.55}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-direction:column;gap:12px}
+.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--muted);margin:0 0 4px}
+h1{font-size:clamp(24px,3.2vw,34px);line-height:1.15;margin:0;font-weight:750;text-wrap:balance}
+.lede{margin:6px 0 0;color:var(--muted);max-width:70ch}
+.models{display:flex;flex-wrap:wrap;gap:8px}
+.model{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 14px 7px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+.model small{font-family:"Times New Roman",Times,serif;font-size:13px;color:var(--muted)}
+.model:hover{border-color:var(--accent)}
+.model[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:stretch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0;display:flex;flex-direction:column}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:10px 14px 8px;flex-wrap:wrap}
+.panel-head b{font-size:14px;font-weight:650}
+.panel-head span{font-size:12px;color:var(--muted)}
+.cv{position:relative;width:100%}
+.cv canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#modelBox{flex:1;min-height:380px;background:var(--stage)}
+#plotBox{aspect-ratio:1.25/1}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding:6px 14px 10px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:16px;height:0;border-top:2.5px solid;vertical-align:middle;margin-right:5px}
+.legend i.d{border-top-style:dashed}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.5fr);gap:16px}
+.smallBox{aspect-ratio:1.5/1}
+.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start}
+.cell{padding:10px 14px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);min-width:0}
+.cell:nth-child(3n){border-right:0}
+.cell .k{font-size:12px;color:var(--muted)}
+.cell .v{font-family:var(--f-num);font-size:clamp(15px,1.5vw,19px);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cell .s{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.controls{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.1fr);gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:13px;margin:0;color:var(--muted);font-weight:600;letter-spacing:.06em}
+.field{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.field label{font-size:13.5px}
+.field output{font-family:var(--f-num);font-size:13px;font-weight:600}
+.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent);margin:0}
+.field.off{opacity:.45}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:inherit;font-size:14px;border-radius:8px;padding:8px 13px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);min-width:84px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;cursor:pointer}
+.chk input{accent-color:var(--accent);width:16px;height:16px;margin-top:3px}
+.chk small{display:block;color:var(--muted);font-size:12px}
+.note{font-size:12px;color:var(--muted)}
+.observe p{margin:0;font-size:14px}
+.observe p+p{margin-top:8px}
+.tag{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600;margin-bottom:3px}
+details.theory{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+details.theory>summary{cursor:pointer;padding:14px 16px;font-weight:650;list-style:none;display:flex;gap:10px;align-items:center}
+details.theory>summary::-webkit-details-marker{display:none}
+details.theory>summary::before{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}
+details.theory[open]>summary::before{transform:rotate(45deg)}
+details.theory>summary span{font-weight:400;color:var(--muted);font-size:13px}
+.tb{padding:0 16px 20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 32px}
+.tb section{min-width:0}
+.tb h3{font-size:15px;margin:0 0 6px}
+.tb p{margin:0 0 8px;max-width:64ch}
+.eq{font-family:"Times New Roman",Times,serif;font-size:17px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:6px 0 10px;overflow-x:auto;white-space:nowrap}
+.eq i{font-style:italic}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;font-size:13.5px;width:100%}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600}
+td.f{font-family:"Times New Roman",Times,serif;font-size:15px}
+@media (max-width:1000px){.row2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .row2 .rd{grid-column:1/-1} .controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .controls .observe{grid-column:1/-1}}
+@media (max-width:760px){.stage,.controls,.tb,.row2{grid-template-columns:minmax(0,1fr)} #modelBox{flex:none;aspect-ratio:1/1;min-height:0} #plotBox{aspect-ratio:1/1.05} .model{flex:1 1 calc(50% - 8px)}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">机械振动 · 交互演示</p>
+      <h1>简谐运动</h1>
+      <p class="lede">物体在平衡位置附近来回运动,而且回复力总和位移成正比、方向相反,这样的运动就是简谐运动。下面五个模型看起来各不相同,它们的 x–t、v–t、a–t 图却是同一种正弦曲线。</p>
+    </div>
+    <div class="models" role="group" aria-label="选择模型">
+      <button class="model" data-m="hs" aria-pressed="true">水平弹簧振子<small>T = 2π√(m/k)</small></button>
+      <button class="model" data-m="vs" aria-pressed="false">竖直弹簧振子<small>T = 2π√(m/k)</small></button>
+      <button class="model" data-m="pd" aria-pressed="false">单摆<small>T ≈ 2π√(L/g)</small></button>
+      <button class="model" data-m="cc" aria-pressed="false">圆周运动的投影<small>x = A sin(ωt+φ)</small></button>
+      <button class="model" data-m="fl" aria-pressed="false">浮在水中的木块<small>T = 2π√(m/ρgS)</small></button>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="panel">
+      <div class="panel-head"><b id="mTitle">水平弹簧振子</b><span id="mSub">光滑水平面,O 为平衡位置</span></div>
+      <div class="cv" id="modelBox"><canvas id="cvM" aria-label="振动模型动画"></canvas></div>
+      <div class="legend"><span><i style="border-color:var(--v)"></i>速度 v</span><span><i style="border-color:var(--a)"></i>回复力 F(与加速度 a 同向)</span><span id="lgGhost" hidden><i class="d" style="border-color:var(--ghost)"></i>振幅减半的对照</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><b>x–t · v–t · a–t</b><span>同一时间轴,竖线是当前时刻</span></div>
+      <div class="cv" id="plotBox"><canvas id="cvP" aria-label="位移速度加速度随时间变化图"></canvas></div>
+      <div class="legend"><span><i style="border-color:var(--x)"></i>位移 x</span><span><i style="border-color:var(--v)"></i>速度 v</span><span><i style="border-color:var(--a)"></i>加速度 a</span><span id="lgAux"></span></div>
+    </div>
+  </section>
+
+  <section class="row2">
+    <div class="panel">
+      <div class="panel-head"><b>F–x 图</b><span>回复力与位移</span></div>
+      <div class="cv smallBox"><canvas id="cvF" aria-label="回复力与位移关系图"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><b>能量</b><span id="enSub">动能与势能相互转化</span></div>
+      <div class="cv smallBox"><canvas id="cvE" aria-label="能量条"></canvas></div>
+    </div>
+    <div class="panel rd">
+      <div class="panel-head"><b>实时读数</b><span id="rdSub"></span></div>
+      <div class="readout">
+        <div class="cell"><div class="k">位移 x</div><div class="v" id="rx">—</div><div class="s" id="rxs">—</div></div>
+        <div class="cell"><div class="k">速度 v</div><div class="v" id="rv">—</div><div class="s" id="rvs">—</div></div>
+        <div class="cell"><div class="k">加速度 a</div><div class="v" id="ra">—</div><div class="s" id="ras">—</div></div>
+        <div class="cell"><div class="k">理论周期 T</div><div class="v" id="rT">—</div><div class="s" id="rTs">—</div></div>
+        <div class="cell"><div class="k">实测周期</div><div class="v" id="rTm">—</div><div class="s" id="rTms">相邻两次同向过 O</div></div>
+        <div class="cell"><div class="k">相位 ωt + φ</div><div class="v" id="rph">—</div><div class="s" id="rphs">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="card">
+      <h2>参数</h2>
+      <div class="field" id="fA"><label for="pA" id="lA">振幅 A</label><output id="oA"></output><input id="pA" type="range"></div>
+      <div class="field" id="fM"><label for="pM">质量 m</label><output id="oM"></output><input id="pM" type="range" min="0.1" max="2" step="0.05"></div>
+      <div class="field" id="fK"><label for="pK" id="lK">劲度系数 k</label><output id="oK"></output><input id="pK" type="range"></div>
+      <div class="field" id="fP"><label for="pP">初相 φ</label><output id="oP"></output><input id="pP" type="range" min="0" max="360" step="5"></div>
+      <span class="note" id="pNote"></span>
+    </div>
+    <div class="card">
+      <h2>播放与对比</h2>
+      <div class="field"><label for="ts">慢放倍率</label><output id="ots"></output><input id="ts" type="range" min="0.1" max="1" step="0.05"></div>
+      <div class="btns">
+        <button class="btn primary" id="bPlay">暂停</button>
+        <button class="btn" id="bReset">重置</button>
+        <button class="btn" id="bQ">前进 T/4</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="cGhost"><span>振幅减半对比<small>两者周期相同:简谐运动的周期与振幅无关</small></span></label>
+      <label class="chk"><input type="checkbox" id="cDamp"><span>加阻尼(反例)<small>振幅越来越小,不再是简谐运动</small></span></label>
+      <label class="chk"><input type="checkbox" id="cCircle"><span>叠加参考圆<small>把振动看成匀速圆周运动的投影</small></span></label>
+    </div>
+    <div class="card observe">
+      <h2>看点</h2>
+      <div id="obs"></div>
+    </div>
+  </section>
+
+  <details class="theory">
+    <summary>原理说明 <span>回复力 · 运动学特征 · 等时性 · 能量 · 常见模型</span></summary>
+    <div class="tb">
+      <section>
+        <h3>1. 什么样的运动是简谐运动</h3>
+        <p>以平衡位置为原点,物体受到的回复力总是指向平衡位置,大小和位移成正比:</p>
+        <div class="eq"><i>F</i> = −<i>kx</i> &nbsp;⇒&nbsp; <i>a</i> = −(<i>k</i>/<i>m</i>)<i>x</i> = −<i>ω</i>²<i>x</i></div>
+        <p>负号表示“方向相反”:物体在右边,力就向左;离得越远,力越大。满足这一条的运动都叫简谐运动,判断时只看这一条。</p>
+      </section>
+      <section>
+        <h3>2. 位移、速度、加速度都是正弦曲线</h3>
+        <div class="eq"><i>x</i> = <i>A</i> sin(<i>ωt</i> + <i>φ</i>) ,&nbsp; <i>v</i> = <i>Aω</i> cos(<i>ωt</i> + <i>φ</i>) ,&nbsp; <i>a</i> = −<i>Aω</i>² sin(<i>ωt</i> + <i>φ</i>)</div>
+        <p>在最大位移处:v = 0,|a| 最大;在平衡位置:|v| 最大,a = 0。三条曲线依次错开 1/4 周期。a 永远和 x 反号,所以 a–t 图是 x–t 图上下翻过来。</p>
+      </section>
+      <section>
+        <h3>3. 周期与振幅无关(等时性)</h3>
+        <p>振幅变大,路程变长,但回复力也按比例变大,跑得更快,两者正好抵消,所以周期只由系统本身决定。打开“振幅减半对比”可以看到两条曲线始终同时过零。</p>
+        <p>单摆只有在小角度时才是简谐运动(sin θ ≈ θ)。摆角 10° 时周期只比公式大约 0.2%,60° 时大约 7%:在单摆模型里把振幅调大就能看到实线(精确)渐渐落后于虚线(简谐近似)。</p>
+      </section>
+      <section>
+        <h3>4. 能量守恒</h3>
+        <div class="eq"><i>E</i> = ½<i>mv</i>² + ½<i>kx</i>² = ½<i>kA</i>²</div>
+        <p>动能和势能以 T/2 为周期相互转化,总能量与振幅平方成正比。竖直弹簧振子里,把重力势能和弹性势能合起来,以平衡位置为零点,同样是 ½kx²。加阻尼后机械能不断减少,振幅衰减,已不再满足 F = −kx,所以不是简谐运动。</p>
+      </section>
+      <section style="grid-column:1/-1">
+        <h3>5. 常见的简谐运动</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>模型</th><th>回复力从哪来</th><th>等效 k</th><th>周期</th></tr></thead>
+          <tbody>
+            <tr><td>水平弹簧振子</td><td>弹簧弹力</td><td class="f"><i>k</i></td><td class="f">2π√(<i>m</i>/<i>k</i>)</td></tr>
+            <tr><td>竖直弹簧振子</td><td>弹力与重力的合力(平衡位置在伸长 mg/k 处)</td><td class="f"><i>k</i></td><td class="f">2π√(<i>m</i>/<i>k</i>)</td></tr>
+            <tr><td>单摆(小角度)</td><td>重力沿切线方向的分力 mg sin θ</td><td class="f"><i>mg</i>/<i>L</i></td><td class="f">2π√(<i>L</i>/<i>g</i>)</td></tr>
+            <tr><td>匀速圆周运动的投影</td><td>向心力在直径方向的分量</td><td class="f"><i>mω</i>²</td><td class="f">2π/<i>ω</i></td></tr>
+            <tr><td>浮在水中的木块</td><td>浮力与重力的合力 −ρgSx</td><td class="f"><i>ρgS</i></td><td class="f">2π√(<i>m</i>/<i>ρgS</i>)</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+    </div>
+  </details>
+</div>
+
+<script>
+(() => {
+'use strict';
+const G = 9.8, RHO = 1000, D2R = Math.PI / 180;
+const $ = id => document.getElementById(id);
+const MODELS = {
+  hs: { title: '水平弹簧振子', sub: '光滑水平面,O 为平衡位置(弹簧原长处)' },
+  vs: { title: '竖直弹簧振子', sub: '平衡位置在弹簧伸长 mg/k 处,不在原长处' },
+  pd: { title: '单摆', sub: '实线:精确运动;虚线:简谐近似 θ ≈ sin θ' },
+  cc: { title: '匀速圆周运动的投影', sub: '点 P 做匀速圆周运动,它在直径上的投影 Q 做简谐运动' },
+  fl: { title: '浮在水中的木块', sub: '横截面积 S 的木块,水的密度 ρ = 1.0×10³ kg/m³' }
+};
+const P = { model: 'hs', A: 0.12, m: 0.5, k: 20, phi: 90, L: 1, th: 10, S: 0.02, T: 2 };
+const S = { t: 0, playing: true, ts: 0.5, ghost: false, damp: false, circle: false };
+let D = {}, st = null, gst = null, hist = [], zc = [];
+function omega() {
+  switch (P.model) {
+    case 'hs': case 'vs': return Math.sqrt(P.k / P.m);
+    case 'pd': return Math.sqrt(G / P.L);
+    case 'cc': return 2 * Math.PI / P.T;
+    case 'fl': return Math.sqrt(RHO * G * P.S / P.m);
+  }
+}
+function amp() { return P.model === 'pd' ? P.L * P.th * D2R : P.model === 'fl' ? Math.min(P.A, 0.9 * P.m / (RHO * P.S)) : P.A; }
+function derive() {
+  const w = omega(), A = amp();
+  let Tex = 2 * Math.PI / w;
+  if (P.model === 'pd') { // 精确周期 T = 2π√(L/g)/AGM(1, cos(θ0/2))
+    let a = 1, b = Math.cos(P.th * D2R / 2); for (let i = 0; i < 12; i++) { const an = (a + b) / 2; b = Math.sqrt(a * b); a = an; }
+    Tex = 2 * Math.PI / w / a;
+  }
+  D = { w, A, T: 2 * Math.PI / w, Tex, beta: S.damp ? 0.08 * w : 0, keq: P.model === 'pd' ? P.m * G / P.L : P.m * w * w };
+}
+function acc(x, v) {
+  const b = 2 * D.beta * v;
+  if (P.model === 'pd') return -G * Math.sin(x / P.L) - b;
+  return -D.w * D.w * x - b;
+}
+function init(A) {
+  const ph = (P.model === 'pd' ? 90 : P.phi) * D2R;
+  return { x: A * Math.sin(ph), v: A * D.w * Math.cos(ph) };
+}
+function rk(s, h) {
+  const k1x = s.v, k1v = acc(s.x, s.v);
+  const k2x = s.v + k1v * h / 2, k2v = acc(s.x + k1x * h / 2, s.v + k1v * h / 2);
+  const k3x = s.v + k2v * h / 2, k3v = acc(s.x + k2x * h / 2, s.v + k2v * h / 2);
+  const k4x = s.v + k3v * h, k4v = acc(s.x + k3x * h, s.v + k3v * h);
+  s.x += h / 6 * (k1x + 2 * k2x + 2 * k3x + k4x); s.v += h / 6 * (k1v + 2 * k2v + 2 * k3v + k4v);
+}
+function reset() {
+  derive(); S.t = 0; st = init(D.A); gst = init(D.A / 2); hist = []; zc = [];
+  record(); syncUI();
+}
+function record() {
+  hist.push({ t: S.t, x: st.x, v: st.v, a: acc(st.x, st.v), gx: gst.x, gv: gst.v, ga: acc(gst.x, gst.v) });
+  const cut = S.t - 4 * D.T - 1; while (hist.length > 2 && hist[0].t < cut) hist.shift();
+}
+function advance(dt) {
+  const h = 1 / 2000;
+  let n = Math.ceil(dt / h); const hh = dt / n;
+  for (let i = 0; i < n; i++) {
+    const xo = st.x;
+    rk(st, hh); rk(gst, hh); S.t += hh;
+    if (xo < 0 && st.x >= 0) zc.push(S.t - hh * st.x / (st.x - xo));
+    if (i % 8 === 7 || i === n - 1) record();
+  }
+  if (zc.length > 6) zc.splice(0, zc.length - 6);
+}
+
+/* colors & canvas */
+let C = {};
+const VARS = ['bg','surface','surface-2','ink','muted','line','accent','x','v','a','ep','ek','ghost','water','water-line','metal','block','grid','tick','pill','stage','f-ui','f-num'];
+function readColors() { const cs = getComputedStyle(document.documentElement); VARS.forEach(v => C[v] = cs.getPropertyValue('--' + v).trim()); }
+const cvs = {}; let dpr = 1;
+function setup(id) { const c = $(id); cvs[id] = { c, g: c.getContext('2d'), w: 0, h: 0 }; new ResizeObserver(() => { const r = c.getBoundingClientRect(); dpr = Math.min(devicePixelRatio || 1, 2); Object.assign(cvs[id], { w: r.width, h: r.height }); c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }).observe(c.parentElement); }
+['cvM', 'cvP', 'cvF', 'cvE'].forEach(setup);
+function begin(id) { const o = cvs[id]; o.g.setTransform(dpr, 0, 0, dpr, 0, 0); o.g.clearRect(0, 0, o.w, o.h); return o; }
+function arrow(g, x1, y1, x2, y2, col, lw = 2.4) {
+  const L = Math.hypot(x2 - x1, y2 - y1); if (L < 3) return;
+  const a = Math.atan2(y2 - y1, x2 - x1), hs = Math.min(10, L * .45);
+  g.strokeStyle = col; g.fillStyle = col; g.lineWidth = lw;
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - Math.cos(a) * hs * .8, y2 - Math.sin(a) * hs * .8); g.stroke();
+  g.beginPath(); g.moveTo(x2, y2); g.lineTo(x2 - Math.cos(a - .45) * hs, y2 - Math.sin(a - .45) * hs); g.lineTo(x2 - Math.cos(a + .45) * hs, y2 - Math.sin(a + .45) * hs); g.closePath(); g.fill();
+}
+function pill(g, txt, x, y, col, align = 'center') {
+  const w = g.measureText(txt).width + 10, h = 19;
+  const x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  g.fillStyle = C.pill; g.beginPath(); g.roundRect ? g.roundRect(x0, y - h / 2, w, h, 4) : g.rect(x0, y - h / 2, w, h); g.fill();
+  g.fillStyle = col; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(txt, x0 + 5, y + .5);
+}
+function springPath(g, x1, y1, x2, y2, coils, amp) {
+  const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, nx = -uy, ny = ux, lead = Math.min(12, L * .1);
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 + ux * lead, y1 + uy * lead);
+  for (let i = 1; i < coils * 2; i++) { const f = lead + (L - 2 * lead) * i / (coils * 2), s = i % 2 ? amp : -amp; g.lineTo(x1 + ux * f + nx * s, y1 + uy * f + ny * s); }
+  g.lineTo(x2 - ux * lead, y2 - uy * lead); g.lineTo(x2, y2); g.stroke();
+}
+
+/* model drawing */
+function drawModel() {
+  const o = begin('cvM'), g = o.g, W = o.w, H = o.h, small = W < 420;
+  g.font = `${small ? 11 : 12.5}px ${C['f-ui']}`;
+  const x = st.x, v = st.v, a = acc(st.x, st.v);
+  const vmax = D.A * D.w || 1, amax = D.A * D.w * D.w || 1;
+  const near = Math.abs(x) < 0.06 * D.A, ext = Math.abs(Math.abs(x) - D.A) < 0.04 * D.A && !S.damp;
+  const tagPos = (px, py) => {
+    if (near) pill(g, '平衡位置:|v| 最大,a = 0', px, py, C.v);
+    else if (ext) pill(g, '最大位移:v = 0,|a| 最大', px, py, C.a);
+  };
+  let cx = W / 2, cyc = H / 2, axisY;
+  if (P.model === 'hs' || P.model === 'cc') {
+    const sc = (W * 0.36) / 0.2;                  // px/m,0.2 m 对应 36% 宽
+    const ox = P.model === 'hs' ? W * 0.56 : W / 2;
+    axisY = P.model === 'hs' ? H * 0.62 : H * 0.82;
+    const X = xx => ox + xx * sc;
+    // 坐标轴
+    g.strokeStyle = C.tick; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(W * 0.06, axisY + 0.5); g.lineTo(W * 0.96, axisY + 0.5); g.stroke();
+    g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'top';
+    [[-D.A, '−A'], [0, 'O'], [D.A, '+A']].forEach(([xx, l]) => { g.beginPath(); g.moveTo(X(xx), axisY - 5); g.lineTo(X(xx), axisY + 5); g.stroke(); g.fillText(l, X(xx), axisY + 8); });
+    if (P.model === 'hs') {
+      const fy = axisY - 4;
+      g.fillStyle = C['surface-2']; g.fillRect(W * 0.04, fy, W * 0.92, 4);
+      g.fillStyle = C.metal; g.fillRect(W * 0.04, fy - 110, 8, 110);
+      for (let i = 0; i < 9; i++) { g.strokeStyle = C.metal; g.beginPath(); g.moveTo(W * 0.04, fy - 12 * i); g.lineTo(W * 0.04 - 8, fy - 12 * i - 8); g.stroke(); }
+      const bw = 56 + 30 * Math.sqrt(P.m), bh = 40 + 22 * Math.sqrt(P.m);
+      const bx = X(x);
+      const drawBlock = (bxx, alpha, dashed) => {
+        g.strokeStyle = C.metal; g.lineWidth = 2; g.globalAlpha = alpha;
+        springPath(g, W * 0.04 + 8, fy - bh / 2, bxx - bw / 2, fy - bh / 2, 13, 9);
+        if (dashed) { g.setLineDash([5, 4]); g.strokeStyle = C.ghost; g.strokeRect(bxx - bw / 2, fy - bh, bw, bh); g.setLineDash([]); }
+        else { g.fillStyle = C.block; g.fillRect(bxx - bw / 2, fy - bh, bw, bh); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(`${P.m.toFixed(2)} kg`, bxx, fy - bh / 2); }
+        g.globalAlpha = 1;
+      };
+      if (S.ghost) drawBlock(X(gst.x), .55, true);
+      drawBlock(bx, 1, false);
+      arrow(g, bx, fy - bh - 18, bx + v / vmax * 70, fy - bh - 18, C.v);
+      arrow(g, bx, fy - bh / 2 + 14, bx + a / amax * 60, fy - bh / 2 + 14, C.a, 2);
+      tagPos(W / 2, 22);
+      cx = bx; cyc = fy - bh / 2;
+    } else {
+      const R = D.A * sc, ccy = H * 0.42;
+      const th = Math.atan2(st.x / D.A, st.v / (D.A * D.w)); // x = A sin θ
+      const px = ox + R * Math.sin(th), py = ccy + R * Math.cos(th);
+      g.strokeStyle = C.line; g.lineWidth = 1.5; g.beginPath(); g.arc(ox, ccy, R, 0, 7); g.stroke();
+      g.strokeStyle = C.tick; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(ox - R - 10, ccy); g.lineTo(ox + R + 10, ccy); g.moveTo(ox, ccy - R - 10); g.lineTo(ox, ccy + R + 10); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = C.x; g.lineWidth = 2; g.beginPath(); g.moveTo(ox, ccy); g.lineTo(px, py); g.stroke();
+      g.strokeStyle = C.muted; g.setLineDash([4, 4]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(px, py); g.lineTo(px, axisY); g.stroke(); g.setLineDash([]);
+      // 角度弧(从竖直向下量起)
+      g.strokeStyle = C.accent; g.lineWidth = 1.5; g.beginPath();
+      const thN = ((th % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      g.arc(ox, ccy, 26, Math.PI / 2, Math.PI / 2 - thN, true); g.stroke();
+      g.fillStyle = C.accent; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('ωt+φ', ox + 30, ccy + 22);
+      // 速度切线
+      arrow(g, px, py, px + Math.cos(th) * 60 * Math.sign(D.w), py - Math.sin(th) * 60, C.v);
+      // 向心加速度
+      arrow(g, px, py, px + (ox - px) * 0.45, py + (ccy - py) * 0.45, C.a, 2);
+      g.fillStyle = C.x; g.beginPath(); g.arc(px, py, 7, 0, 7); g.fill();
+      g.fillStyle = C.ink; g.fillText('P', px + 10, py - 10);
+      const qx = X(x);
+      g.fillStyle = C.block; g.beginPath(); g.arc(qx, axisY, 8, 0, 7); g.fill();
+      g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText('Q', qx, axisY - 10);
+      arrow(g, qx, axisY - 26, qx + v / vmax * 60, axisY - 26, C.v);
+      if (S.ghost) { g.setLineDash([5, 4]); g.strokeStyle = C.ghost; g.beginPath(); g.arc(ox, ccy, R / 2, 0, 7); g.stroke(); g.setLineDash([]); g.fillStyle = C.ghost; g.beginPath(); g.arc(X(gst.x), axisY, 5, 0, 7); g.fill(); }
+      tagPos(W / 2, 20);
+      return;
+    }
+  } else if (P.model === 'vs') {
+    const sc = (H * 0.28) / 0.2;
+    const topY = 26, ox = W * 0.42;
+    const x0 = P.m * G / P.k;                  // 平衡伸长
+    const natLen = H * 0.24, eqY = topY + natLen + Math.min(x0 * sc, H * 0.3);
+    const Y = xx => eqY - xx * sc;             // x 向上为正
+    g.fillStyle = C.metal; g.fillRect(W * 0.2, topY - 8, W * 0.44, 8);
+    for (let i = 0; i < 12; i++) { g.strokeStyle = C.metal; g.beginPath(); g.moveTo(W * 0.2 + i * W * 0.04, topY - 8); g.lineTo(W * 0.2 + i * W * 0.04 + 8, topY - 16); g.stroke(); }
+    const bw = 50 + 26 * Math.sqrt(P.m), bh = 36 + 18 * Math.sqrt(P.m);
+    const by = Y(x);
+    const drawB = (yy, ghost) => {
+      g.strokeStyle = ghost ? C.ghost : C.metal; g.lineWidth = 2; g.globalAlpha = ghost ? .6 : 1;
+      springPath(g, ox, topY, ox, yy - bh / 2, 12, 10);
+      if (ghost) { g.setLineDash([5, 4]); g.strokeRect(ox - bw / 2, yy - bh / 2, bw, bh); g.setLineDash([]); }
+      else { g.fillStyle = C.block; g.fillRect(ox - bw / 2, yy - bh / 2, bw, bh); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(`${P.m.toFixed(2)} kg`, ox, yy); }
+      g.globalAlpha = 1;
+    };
+    // 参考线
+    const lx0 = W * 0.12, lx1 = W * 0.9;
+    const line = (yy, col, dash, lab) => { g.strokeStyle = col; g.setLineDash(dash); g.lineWidth = 1.2; g.beginPath(); g.moveTo(lx0, yy); g.lineTo(lx1, yy); g.stroke(); g.setLineDash([]); g.fillStyle = col; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillText(lab, lx1, yy - 3); };
+    line(topY + natLen + bh / 2, C.muted, [2, 4], '弹簧原长时物块中心');
+    line(eqY, C.x, [6, 4], '平衡位置 O(伸长 mg/k = ' + (x0 * 100).toFixed(1) + ' cm)');
+    line(Y(D.A), C.tick, [3, 5], '+A'); line(Y(-D.A), C.tick, [3, 5], '−A');
+    if (S.ghost) drawB(Y(gst.x), true);
+    drawB(by, false);
+    const ax = ox + bw / 2 + 24;
+    arrow(g, ax, by, ax, by - v / vmax * 70, C.v);
+    arrow(g, ax + 18, by, ax + 18, by - a / amax * 60, C.a, 2);
+    g.fillStyle = C.muted; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('取向上为正', W * 0.12, H - 16);
+    tagPos(W * 0.62, H - 18);
+    return;
+  } else if (P.model === 'pd') {
+    const px0 = W / 2, py0 = 28;
+    const Lp = Math.min(H * 0.62, (W / 2 - 24) / Math.max(Math.sin(P.th * D2R), 0.35));
+    const th = st.x / P.L;
+    g.fillStyle = C.metal; g.fillRect(px0 - 60, py0 - 8, 120, 8);
+    g.strokeStyle = C.tick; g.setLineDash([4, 5]); g.lineWidth = 1; g.beginPath(); g.moveTo(px0, py0); g.lineTo(px0, py0 + Lp + 30); g.stroke(); g.setLineDash([]);
+    // 振幅弧
+    const t0 = P.th * D2R;
+    g.strokeStyle = C.line; g.lineWidth = 1.5; g.beginPath(); g.arc(px0, py0, Lp, Math.PI / 2 - t0, Math.PI / 2 + t0); g.stroke();
+    const bob = (ang, ghost) => {
+      const bx = px0 + Lp * Math.sin(ang), by = py0 + Lp * Math.cos(ang);
+      g.strokeStyle = ghost ? C.ghost : C.ink; g.lineWidth = ghost ? 1 : 1.5; g.globalAlpha = ghost ? .6 : 1;
+      if (ghost) g.setLineDash([4, 4]);
+      g.beginPath(); g.moveTo(px0, py0); g.lineTo(bx, by); g.stroke(); g.setLineDash([]);
+      g.fillStyle = ghost ? C.ghost : C.block; g.beginPath(); g.arc(bx, by, 10 + 6 * Math.sqrt(P.m), 0, 7); g.fill();
+      g.globalAlpha = 1; return [bx, by];
+    };
+    // 简谐近似的“影子”摆球
+    const tN = S.t, appr = t0 * Math.cos(D.w * tN);
+    if (!S.damp) { g.globalAlpha = .45; g.fillStyle = C.x; const ax = px0 + Lp * Math.sin(appr), ay = py0 + Lp * Math.cos(appr); g.beginPath(); g.arc(ax, ay, 6, 0, 7); g.fill(); g.globalAlpha = 1; }
+    if (S.ghost) bob(gst.x / P.L, true);
+    const [bx, by] = bob(th, false);
+    const tx = Math.cos(th), ty = -Math.sin(th); // 切向(θ 增大方向)
+    arrow(g, bx, by, bx + tx * v / vmax * 60, by + ty * v / vmax * 60, C.v);
+    arrow(g, bx, by, bx + tx * a / amax * 50, by + ty * a / amax * 50, C.a, 2);
+    g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(`θ = ${(th / D2R).toFixed(1)}°`, px0, py0 + Lp + 34);
+    g.fillStyle = C.x; g.globalAlpha = .8; g.fillText('浅色小球:按简谐近似应在的位置', px0, H - 22); g.globalAlpha = 1;
+    tagPos(W / 2, 20 + 18);
+    return;
+  } else if (P.model === 'fl') {
+    const h0 = P.m / (RHO * P.S);               // 平衡浸没深度
+    const side = Math.sqrt(P.S);                // 正方形截面边长
+    const Hb = Math.max(h0 * 1.9, h0 + D.A * 1.3);
+    const sc = (H * 0.5) / Math.max(Hb, 0.12);
+    const wy = H * 0.45, ox = W / 2;
+    const bw = Math.min(W * 0.4, side * sc * 1.0 + 30);
+    g.fillStyle = C.water; g.globalAlpha = .7; g.fillRect(W * 0.08, wy, W * 0.84, H - wy - 18); g.globalAlpha = 1;
+    g.strokeStyle = C['water-line']; g.lineWidth = 2; g.beginPath(); g.moveTo(W * 0.08, wy); g.lineTo(W * 0.92, wy); g.stroke();
+    g.strokeStyle = C.metal; g.lineWidth = 3; g.beginPath(); g.moveTo(W * 0.08, wy - 40); g.lineTo(W * 0.08, H - 18); g.lineTo(W * 0.92, H - 18); g.lineTo(W * 0.92, wy - 40); g.stroke();
+    const depth = h0 - st.x;                    // x 向上为正
+    const topY = wy + depth * sc - Hb * sc;
+    const drawB = (dp, ghost) => {
+      const ty = wy + dp * sc - Hb * sc;
+      if (ghost) { g.setLineDash([5, 4]); g.strokeStyle = C.ghost; g.strokeRect(ox - bw / 2, ty, bw, Hb * sc); g.setLineDash([]); return; }
+      g.fillStyle = C.block; g.fillRect(ox - bw / 2, ty, bw, Hb * sc);
+      g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(ox - bw / 2, wy, bw, Math.max(0, ty + Hb * sc - wy));
+    };
+    if (S.ghost) drawB(h0 - gst.x, true);
+    drawB(depth, false);
+    const eqTop = wy + h0 * sc - Hb * sc;
+    g.strokeStyle = C.x; g.setLineDash([6, 4]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(ox - bw / 2 - 30, eqTop); g.lineTo(ox + bw / 2 + 30, eqTop); g.stroke(); g.setLineDash([]);
+    g.fillStyle = C.x; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText('平衡时顶面', ox + bw / 2 + 8, eqTop - 3);
+    const ax = ox - bw / 2 - 26;
+    arrow(g, ax, topY + 30, ax, topY + 30 - v / vmax * 60, C.v);
+    arrow(g, ax - 18, topY + 30, ax - 18, topY + 30 - a / amax * 50, C.a, 2);
+    g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(`浸没深度 ${(depth * 100).toFixed(1)} cm(平衡 ${(h0 * 100).toFixed(1)} cm)`, W / 2, H - 14 - 0 > wy ? Math.min(H - 16, wy + Hb * sc + 14) : H - 16);
+    tagPos(W / 2, 20);
+    return;
+  }
+  // hs 的参考圆叠加
+  if (S.circle && P.model === 'hs') {
+    const sc = (W * 0.36) / 0.2, R = D.A * sc, ox = W * 0.56, ccy = H * 0.26;
+    const th = Math.atan2(st.x / D.A, st.v / (D.A * D.w));
+    const px = ox + R * Math.sin(th), py = ccy + R * Math.cos(th) * 0.45;
+    g.strokeStyle = C.line; g.lineWidth = 1.2; g.beginPath(); g.ellipse(ox, ccy, R, R * 0.45, 0, 0, 7); g.stroke();
+    g.fillStyle = C.x; g.beginPath(); g.arc(px, py, 6, 0, 7); g.fill();
+    g.strokeStyle = C.muted; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(px, py); g.lineTo(px, axisY - 50); g.stroke(); g.setLineDash([]);
+  }
+}
+function circleOverlay() { // 其他模型右上角的小参考圆
+  if (!S.circle || P.model === 'cc' || P.model === 'hs') return;
+  const o = cvs.cvM, g = o.g, R = Math.min(o.w, o.h) * 0.11, ox = o.w - R - 16, oy = R + 40;
+  const th = Math.atan2(st.x / D.A, st.v / (D.A * D.w));
+  g.strokeStyle = C.line; g.lineWidth = 1.2; g.beginPath(); g.arc(ox, oy, R, 0, 7); g.stroke();
+  const px = ox + R * Math.sin(th), py = oy + R * Math.cos(th);
+  g.strokeStyle = C.x; g.lineWidth = 1.5; g.beginPath(); g.moveTo(ox, oy); g.lineTo(px, py); g.stroke();
+  g.fillStyle = C.x; g.beginPath(); g.arc(px, py, 4, 0, 7); g.fill();
+  g.fillStyle = C.muted; g.font = `11px ${C['f-ui']}`; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText('参考圆', ox, oy + R + 4);
+}
+
+/* time plots */
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))); const f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+function fmtT(v, s) { const d = Math.max(0, -Math.floor(Math.log10(s) + 1e-9)); return (Math.abs(v) < s / 1e6 ? 0 : v).toFixed(d); }
+function drawPlots() {
+  const o = begin('cvP'), g = o.g, W = o.w, H = o.h, small = W < 420;
+  const L = small ? 44 : 54, R = 12, T = 8, B = 24, gap = 10;
+  const ph = (H - T - B - gap * 2) / 3, pw = W - L - R;
+  const tw = Math.max(3 * D.T, 2);
+  const t1 = Math.max(tw, S.t), t0 = t1 - tw;
+  const X = t => L + (t - t0) / tw * pw;
+  const rows = [
+    { key: 'x', gk: 'gx', col: C.x, max: D.A, lab: P.model === 'pd' ? 's / m(弧长)' : 'x / m', unit: 'm' },
+    { key: 'v', gk: 'gv', col: C.v, max: D.A * D.w, lab: 'v / (m·s⁻¹)' },
+    { key: 'a', gk: 'ga', col: C.a, max: P.model === 'pd' ? G * Math.sin(Math.min(P.th, 90) * D2R) : D.A * D.w * D.w, lab: 'a / (m·s⁻²)' }
+  ];
+  g.font = `${small ? 9.5 : 10.5}px ${C['f-num']}`;
+  rows.forEach((r, i) => {
+    const y0 = T + i * (ph + gap), m = r.max * 1.15 || 1;
+    const Y = v => y0 + ph / 2 - v / m * ph / 2;
+    g.fillStyle = C['surface-2']; g.fillRect(L, y0, pw, ph);
+    g.strokeStyle = C.grid; g.lineWidth = 1;
+    const st_ = niceStep(m / 2);
+    g.fillStyle = C.muted; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let v = -Math.floor(m / st_) * st_; v <= m; v += st_) { g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(L + pw, Y(v)); g.stroke(); g.fillText(fmtT(v, st_), L - 4, Y(v)); }
+    g.strokeStyle = C.tick; g.beginPath(); g.moveTo(L, Y(0)); g.lineTo(L + pw, Y(0)); g.stroke();
+    g.save(); g.beginPath(); g.rect(L, y0, pw, ph); g.clip();
+    // T/4 竖线
+    for (let k = Math.ceil(t0 / (D.T / 4)); k * D.T / 4 <= t1; k++) { g.strokeStyle = C.grid; g.beginPath(); g.moveTo(X(k * D.T / 4), y0); g.lineTo(X(k * D.T / 4), y0 + ph); g.stroke(); }
+    if (P.model === 'pd' && i === 0 && !S.damp) { // 简谐近似虚线
+      g.strokeStyle = C.x; g.globalAlpha = .5; g.setLineDash([5, 4]); g.lineWidth = 1.6; g.beginPath();
+      for (let k = 0; k <= 200; k++) { const t = t0 + (Math.min(S.t, t1) - t0) * k / 200; const v = D.A * Math.cos(D.w * t); k ? g.lineTo(X(t), Y(v)) : g.moveTo(X(t), Y(v)); }
+      g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    }
+    if (S.ghost) { g.strokeStyle = C.ghost; g.setLineDash([5, 4]); g.lineWidth = 1.6; g.beginPath(); let f = true; for (const h of hist) { if (h.t < t0) continue; f ? g.moveTo(X(h.t), Y(h[r.gk])) : g.lineTo(X(h.t), Y(h[r.gk])); f = false; } g.stroke(); g.setLineDash([]); }
+    g.strokeStyle = r.col; g.lineWidth = 2.2; g.beginPath(); let f = true;
+    for (const h of hist) { if (h.t < t0) continue; f ? g.moveTo(X(h.t), Y(h[r.key])) : g.lineTo(X(h.t), Y(h[r.key])); f = false; }
+    g.stroke();
+    const lastH = hist[hist.length - 1]; g.fillStyle = r.col; g.beginPath(); g.arc(X(lastH.t), Y(lastH[r.key]), 3.5, 0, 7); g.fill();
+    g.restore();
+    g.fillStyle = r.col; g.textAlign = 'left'; g.textBaseline = 'top'; g.font = `600 ${small ? 10 : 11}px ${C['f-ui']}`; g.fillText(r.lab, L + 5, y0 + 3); g.font = `${small ? 9.5 : 10.5}px ${C['f-num']}`;
+  });
+  // 当前时刻竖线
+  g.strokeStyle = C.ink; g.globalAlpha = .45; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(Math.min(S.t, t1)), T); g.lineTo(X(Math.min(S.t, t1)), H - B); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+  g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'top';
+  const ts = niceStep(tw / (small ? 4 : 6));
+  for (let t = Math.ceil(t0 / ts) * ts; t <= t1 + 1e-9; t += ts) g.fillText(fmtT(t, ts), X(t), H - B + 5);
+  g.textAlign = 'right'; g.fillText('t / s', W - R, H - B + 5 + (small ? 0 : 0));
+}
+function drawFx() {
+  const o = begin('cvF'), g = o.g, W = o.w, H = o.h;
+  const L = 36, R = 12, T = 12, B = 22, pw = W - L - R, ph = H - T - B;
+  const xm = D.A * 1.2, fm = (P.model === 'pd' ? P.m * G * Math.sin(Math.min(P.th, 90) * D2R) : D.keq * D.A) * 1.25 || 1;
+  const X = x => L + pw / 2 + x / xm * pw / 2, Y = f => T + ph / 2 - f / fm * ph / 2;
+  g.strokeStyle = C.tick; g.lineWidth = 1; g.beginPath(); g.moveTo(L, Y(0)); g.lineTo(L + pw, Y(0)); g.moveTo(X(0), T); g.lineTo(X(0), T + ph); g.stroke();
+  g.fillStyle = C.muted; g.font = `10.5px ${C['f-num']}`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillText('x', L + pw, Y(0) + 3); g.textAlign = 'left'; g.fillText('F', X(0) + 4, T);
+  g.textAlign = 'center'; g.fillText('−A', X(-D.A), Y(0) + 3); g.fillText('+A', X(D.A), Y(0) + 3);
+  g.strokeStyle = C.a; g.lineWidth = 2; g.beginPath();
+  for (let k = 0; k <= 60; k++) { const x = -D.A + 2 * D.A * k / 60; const f = P.model === 'pd' ? -P.m * G * Math.sin(x / P.L) : -D.keq * x; k ? g.lineTo(X(x), Y(f)) : g.moveTo(X(x), Y(f)); }
+  g.stroke();
+  if (P.model === 'pd') { g.strokeStyle = C.a; g.globalAlpha = .4; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(X(-D.A), Y(D.keq * D.A)); g.lineTo(X(D.A), Y(-D.keq * D.A)); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; }
+  const f = P.m * acc(st.x, st.v);
+  g.fillStyle = C.a; g.beginPath(); g.arc(X(st.x), Y(f), 5, 0, 7); g.fill();
+  g.fillStyle = C.ink; g.font = `11.5px ${C['f-ui']}`; g.textAlign = 'right'; g.textBaseline = 'top';
+  g.fillText(P.model === 'pd' && P.th > 15 ? '大角度时偏离直线' : 'F = −kx,过原点的直线', L + pw, T);
+}
+function drawEnergy() {
+  const o = begin('cvE'), g = o.g, W = o.w, H = o.h;
+  let ek = .5 * P.m * st.v * st.v, ep;
+  if (P.model === 'pd') ep = P.m * G * P.L * (1 - Math.cos(st.x / P.L));
+  else ep = .5 * D.keq * st.x * st.x;
+  const e0 = P.model === 'pd' ? P.m * G * P.L * (1 - Math.cos(P.th * D2R)) : .5 * D.keq * D.A * D.A;
+  const items = [['动能 Ek', ek, C.ek], ['势能 Ep', ep, C.ep], ['总能量', ek + ep, C.ink]];
+  const max = e0 * 1.08 || 1, top = 14, base = H - 40, gap = 12, bw = (W - 24 - gap * 2) / 3;
+  g.font = `11.5px ${C['f-ui']}`;
+  items.forEach(([lab, v, col], i) => {
+    const x = 12 + i * (bw + gap), h = (base - top) * Math.min(1.05, v / max);
+    g.fillStyle = C['surface-2']; g.fillRect(x, top, bw, base - top);
+    g.fillStyle = col; g.globalAlpha = i === 2 ? .3 : .85; g.fillRect(x, base - h, bw, h); g.globalAlpha = 1;
+    g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(lab, x + bw / 2, base + 5);
+    g.fillStyle = C.muted; g.font = `10.5px ${C['f-num']}`; g.fillText((v * 1000).toFixed(1) + ' mJ', x + bw / 2, base + 20); g.font = `11.5px ${C['f-ui']}`;
+  });
+  g.strokeStyle = C.ink; g.globalAlpha = .5; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(8, top + (base - top) * (1 - 1 / 1.08)); g.lineTo(W - 8, top + (base - top) * (1 - 1 / 1.08)); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+}
+
+/* readouts / text */
+const sg = (v, d) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
+let lastR = 0;
+function readout(force) {
+  const now = performance.now(); if (!force && now - lastR < 100) return; lastR = now;
+  const a = acc(st.x, st.v);
+  if (P.model === 'pd') { $('rx').textContent = sg(st.x / P.L / D2R, 2) + '°'; $('rxs').textContent = `弧长 s = ${sg(st.x * 100, 1)} cm`; }
+  else { $('rx').textContent = sg(st.x * 100, 2) + ' cm'; $('rxs').textContent = Math.abs(st.x) < 0.04 * D.A ? '在平衡位置附近' : st.x > 0 ? '在正方向一侧' : '在负方向一侧'; }
+  $('rv').textContent = sg(st.v, 3) + ' m/s'; $('rvs').textContent = `最大 ${(D.A * D.w).toFixed(3)} m/s`;
+  $('ra').textContent = sg(a, 2) + ' m/s²'; $('ras').textContent = Math.abs(st.x) > 1e-4 ? (a * st.x < 0 ? 'a 与 x 方向相反' : '—') : 'a ≈ 0';
+  $('rT').textContent = (P.model === 'pd' ? D.Tex : D.T).toFixed(3) + ' s';
+  $('rTs').textContent = P.model === 'pd' ? `简谐近似 2π√(L/g) = ${D.T.toFixed(3)} s` : `ω = ${D.w.toFixed(2)} rad/s`;
+  $('rTm').textContent = zc.length > 1 ? (zc[zc.length - 1] - zc[zc.length - 2]).toFixed(3) + ' s' : '测量中…';
+  const phs = ((D.w * S.t + (P.model === 'pd' ? 90 : P.phi) * D2R) / D2R) % 360;
+  $('rph').textContent = phs.toFixed(0) + '°'; $('rphs').textContent = `已振动 ${(S.t / D.T).toFixed(2)} 个周期`;
+  $('rdSub').textContent = S.damp ? '阻尼开启' : '';
+}
+function observe() {
+  const out = [];
+  const tip = {
+    hs: '回复力就是弹簧弹力。物块在右边时弹簧伸长,力向左;在左边时弹簧压缩,力向右。',
+    vs: '回复力是弹力和重力的合力。平衡位置在弹簧已伸长 mg/k 的地方,以这里为原点,合力依然是 F = −kx,周期和水平放置时一样。',
+    pd: '回复力是重力沿切线方向的分力 mg sin θ。小角度时 sin θ ≈ θ,才近似为 F = −(mg/L)s。把摆角调大,看实线(精确)怎样落后于虚线(近似)。',
+    cc: '点 P 匀速转圈,它在水平直径上的投影 Q 就在 −A 到 +A 之间做简谐运动,ω 就是 P 转动的角速度,所以简谐运动的 ω 叫“角频率”。',
+    fl: '木块被压下 x 时,多排开 Sx 体积的水,浮力多出 ρgSx,方向向上;合力 F = −ρgSx,等效劲度系数 k = ρgS。'
+  }[P.model];
+  out.push(['回复力', tip]);
+  if (P.model === 'pd') {
+    const dev = (D.Tex / D.T - 1) * 100;
+    out.push(['等时性', `摆角 ${P.th}°:精确周期 ${D.Tex.toFixed(3)} s,比简谐近似长 ${dev.toFixed(dev < 1 ? 2 : 1)}%。${P.th <= 10 ? '小角度下几乎看不出差别。' : '角度越大,偏差越明显。'}`]);
+  } else out.push(['等时性', `理论周期 ${D.T.toFixed(3)} s,只由 ${P.model === 'cc' ? '转动快慢' : P.model === 'fl' ? 'm 和 ρgS' : 'm 和 k'} 决定。改振幅试试,周期不变。`]);
+  if (S.damp) out.push(['反例', '阻尼让机械能不断减少,振幅一圈比一圈小。它不满足 F = −kx,不是简谐运动。']);
+  if (S.ghost) out.push(['对比', '虚线是振幅减半的同一个系统:两条曲线同时过零、同时到达最大值,周期相同。']);
+  $('obs').innerHTML = out.map(([t, x]) => `<p><span class="tag">${t}</span><br>${x}</p>`).join('');
+}
+
+/* controls */
+function cfg() {
+  const m = P.model;
+  const A = $('pA'), K = $('pK');
+  if (m === 'pd') { A.min = 2; A.max = 80; A.step = 1; A.value = P.th; $('lA').textContent = '摆角 θ₀'; $('oA').textContent = P.th + '°'; }
+  else if (m === 'fl') { A.min = 0.005; A.max = 0.08; A.step = 0.005; A.value = P.A; $('lA').textContent = '振幅 A'; $('oA').textContent = (amp() * 100).toFixed(1) + ' cm'; }
+  else { A.min = 0.02; A.max = 0.2; A.step = 0.01; A.value = P.A; $('lA').textContent = '振幅 A'; $('oA').textContent = (P.A * 100).toFixed(0) + ' cm'; }
+  if (m === 'pd') { K.min = 0.2; K.max = 2; K.step = 0.05; K.value = P.L; $('lK').textContent = '摆长 L'; $('oK').textContent = P.L.toFixed(2) + ' m'; }
+  else if (m === 'cc') { K.min = 0.5; K.max = 4; K.step = 0.1; K.value = P.T; $('lK').textContent = '转一圈用时 T'; $('oK').textContent = P.T.toFixed(1) + ' s'; }
+  else if (m === 'fl') { K.min = 0.004; K.max = 0.04; K.step = 0.001; K.value = P.S; $('lK').textContent = '横截面积 S'; $('oK').textContent = (P.S * 1e4).toFixed(0) + ' cm²'; }
+  else { K.min = 5; K.max = 100; K.step = 1; K.value = P.k; $('lK').textContent = '劲度系数 k'; $('oK').textContent = P.k + ' N/m'; }
+  $('pM').value = P.m; $('oM').textContent = P.m.toFixed(2) + ' kg';
+  $('fM').classList.toggle('off', m === 'cc');
+  $('pP').value = P.phi; $('oP').textContent = P.phi + '°'; $('fP').classList.toggle('off', m === 'pd');
+  $('pP').disabled = m === 'pd'; $('pM').disabled = m === 'cc';
+  $('pNote').textContent = m === 'pd' ? '单摆从最大摆角处由静止释放,所以初相固定为 90°。质量不影响周期。' : m === 'fl' && P.A > amp() + 1e-9 ? `振幅已限制在 ${(amp() * 100).toFixed(1)} cm,避免木块跳出水面。` : m === 'cc' ? '圆周运动的投影没有质量参数;能量按 1 kg 计算。' : '初相 φ = 90° 表示从 +A 处由静止释放。';
+}
+function syncUI() {
+  cfg();
+  $('ts').value = S.ts; $('ots').textContent = S.ts.toFixed(2) + '×';
+  $('bPlay').textContent = S.playing ? '暂停' : '播放';
+  $('mTitle').textContent = MODELS[P.model].title; $('mSub').textContent = MODELS[P.model].sub;
+  $('lgGhost').hidden = !S.ghost;
+  $('lgAux').innerHTML = P.model === 'pd' ? '<i class="d" style="border-color:var(--x)"></i>简谐近似' : '';
+  observe();
+}
+$('pA').addEventListener('input', e => { if (P.model === 'pd') P.th = +e.target.value; else P.A = +e.target.value; reset(); });
+$('pM').addEventListener('input', e => { P.m = +e.target.value; reset(); });
+$('pK').addEventListener('input', e => { const v = +e.target.value; if (P.model === 'pd') P.L = v; else if (P.model === 'cc') P.T = v; else if (P.model === 'fl') P.S = v; else P.k = v; reset(); });
+$('pP').addEventListener('input', e => { P.phi = +e.target.value; reset(); });
+$('ts').addEventListener('input', e => { S.ts = +e.target.value; syncUI(); });
+$('bPlay').addEventListener('click', () => { S.playing = !S.playing; syncUI(); });
+$('bReset').addEventListener('click', reset);
+$('bQ').addEventListener('click', () => { advance(D.T / 4); S.playing = false; syncUI(); });
+$('cGhost').addEventListener('change', e => { S.ghost = e.target.checked; syncUI(); });
+$('cDamp').addEventListener('change', e => { S.damp = e.target.checked; reset(); });
+$('cCircle').addEventListener('change', e => { S.circle = e.target.checked; });
+document.querySelectorAll('.model').forEach(b => b.addEventListener('click', () => {
+  P.model = b.dataset.m;
+  Object.assign(P, { hs: { A: 0.12, m: 0.5, k: 20 }, vs: { A: 0.1, m: 0.5, k: 20 }, pd: { th: 10, L: 1, m: 0.5 }, cc: { A: 0.12, T: 2, m: 1 }, fl: { A: 0.02, m: 0.6, S: 0.02 } }[P.model]);
+  document.querySelectorAll('.model').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  reset();
+}));
+document.addEventListener('keydown', e => { if (e.code === 'Space' && !/INPUT|BUTTON|SUMMARY/.test(document.activeElement.tagName)) { e.preventDefault(); S.playing = !S.playing; syncUI(); } });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  if (S.playing) advance(dt * S.ts);
+  if (cvs.cvM.w) { drawModel(); circleOverlay(); }
+  if (cvs.cvP.w) drawPlots();
+  if (cvs.cvF.w) drawFx();
+  if (cvs.cvE.w) drawEnergy();
+  readout();
+  requestAnimationFrame(frame);
+}
+const themeRefresh = () => readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeRefresh);
+new MutationObserver(themeRefresh).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+readColors(); reset(); readout(true);
+requestAnimationFrame(frame);
+window.sim = { P, S, get D() { return D; }, get st() { return st; }, get zc() { return zc; }, advance, reset };
+})();
+</script>
+
+</body>
+</html>
